@@ -1,8 +1,8 @@
 rigelslam_rot:
-  detector_config_path: /home/zzy/SLAM/mri-mms/src/Rot_intensity_augm_LIVO/config/LoopConfig.yaml
+  detector_config_path: /home/zzy/SLAM/MRI-MMS/src/Rot_SLAM/config/LoopConfig.yaml
   saveDirectory: /home/zg/catkin_ws/tmp/
   saveRawPath: /home/zg/catkin_ws/renderbag/2024-11-18-16-46-49.raw
-  equipmentParamsFile: /home/zzy/SLAM/mri-mms/src/Rot_intensity_augm_LIVO/config/equipment_param_sim.txt
+  equipmentParamsFile: /home/zzy/SLAM/MRI-MMS/src/Rot_SLAM/config/equipment_param_sim.txt
   isPlayBackTask: false
   playBackFileName: /home/zg/catkin_ws/originbag/2024-11-18-16-46-49.bin
   isContinueTask: false
@@ -25,7 +25,7 @@ rigelslam_rot:
   map_path: /media/zzy/T7/MRI-MMS_EXP/mapping/longtunnel/Ours/MapCloud_down.pcd
 
 
-model_path: /home/zzy/SLAM/mri-mms/src/Rot_intensity_augm_LIVO/weights/gpu.pt
+model_path: /home/zzy/SLAM/MRI-MMS/src/Rot_SLAM/weights/gpu.pt
 visualize_en_: 1
 draw_keypoints_: 1
 

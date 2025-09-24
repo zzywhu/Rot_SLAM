@@ -31,14 +31,9 @@
 *.out
 *.app
 
-<<<<<<< HEAD
-PCD/*
-=======
 PCD/*
 
 BEV/*
 
 MapResult/*
 
-
->>>>>>> revise match

@@ -351,10 +351,10 @@ add_library(LoopCloser SHARED ${LoopCloser_SRC})
 target_link_libraries(LoopCloser Misc Mapper Registrator Feature Optimizer DataIO ${PCL_LIBRARIES} ${PTHREADS_LIBRARY} ${CERES_LIBRARIES} gtsam)
 target_compile_definitions(LoopCloser PRIVATE $<$<CXX_COMPILER_ID:MSVC>:__DLL_EXPORTS__>)
 
-#file(GLOB_RECURSE xfeat_SRC "src/xfeat/*.cpp")
-#add_library(xfeat SHARED ${xfeat_SRC})
-#target_link_libraries(xfeat ${OpenCV_LIBS} ${TORCH_LIBRARIES} Misc Mapper Registrator Feature Optimizer DataIO ${PCL_LIBRARIES} ${PTHREADS_LIBRARY} ${CERES_LIBRARIES} gtsam)
-#target_compile_definitions(xfeat PRIVATE $<$<CXX_COMPILER_ID:MSVC>:__DLL_EXPORTS__>)
+file(GLOB_RECURSE xfeat_SRC "src/xfeat/*.cpp")
+add_library(xfeat SHARED ${xfeat_SRC})
+target_link_libraries(xfeat ${OpenCV_LIBS} ${TORCH_LIBRARIES} Misc Mapper Registrator Feature Optimizer DataIO ${PCL_LIBRARIES} ${PTHREADS_LIBRARY} ${CERES_LIBRARIES} gtsam)
+target_compile_definitions(xfeat PRIVATE $<$<CXX_COMPILER_ID:MSVC>:__DLL_EXPORTS__>)
 
 file(GLOB_RECURSE mlsd_SRC "src/MLSD/*.cpp")
 add_library(mlsd SHARED ${mlsd_SRC})
@@ -371,11 +371,6 @@ add_library(patchwork SHARED ${imgp_SRC})
 target_link_libraries(patchwork ${OpenCV_LIBS} ${PCL_LIBRARIES} Mapper mlsd) 
 target_compile_definitions(patchwork PRIVATE $<$<CXX_COMPILER_ID:MSVC>:__DLL_EXPORTS__>)
 
-
-<<<<<<< HEAD
-=======
-
->>>>>>> revise match
 SET(cv_bridge_LIBRARIES "/opt/ros/noetic/lib/libcv_bridge.so")
 #file(GLOB_RECURSE SlamSys_SRC "src/System.cpp")
 if(MSVC)
@@ -405,13 +400,8 @@ else()
             "src/System/System-utils.cpp")
 endif()
 
-<<<<<<< HEAD
-target_link_libraries(SlamCore mlsd imgp SensorProcess DataIO Feature Initializer LoopCloser Mapper Matcher Misc Optimizer Registrator Viewer 
-${PCL_LIBRARIES} ${PCAP_LIBRARIES} ${PTHREADS_LIBRARY} ${CERES_LIBRARIES} ${GTSAM_LIBRARIES} ${YAML_CPP_LIBRARIES} ${OpenCV_LIBRARIES}  ${cv_bridge_LIBRARIES} PandarGeneralSDK )
-=======
 target_link_libraries(SlamCore mlsd  xfeat imgp SensorProcess patchwork DataIO Feature BEVProcess Initializer LoopCloser Mapper Matcher Misc Optimizer Registrator Viewer 
 ${PCL_LIBRARIES} ${PCAP_LIBRARIES} ${TORCH_LIBRARIES} ${PTHREADS_LIBRARY} ${CERES_LIBRARIES} ${GTSAM_LIBRARIES} ${YAML_CPP_LIBRARIES} ${OpenCV_LIBRARIES}  ${cv_bridge_LIBRARIES} PandarGeneralSDK )
->>>>>>> revise match
 
 target_compile_definitions(SlamCore PRIVATE $<$<CXX_COMPILER_ID:MSVC>:__DLL_EXPORTS__>)
 

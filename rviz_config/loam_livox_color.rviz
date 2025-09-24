@@ -319,11 +319,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-<<<<<<< HEAD
-      Distance: 23.459754943847656
-=======
       Distance: 46.305397033691406
->>>>>>> revise match
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
