@@ -23,34 +23,24 @@
 #include <yaml-cpp/yaml.h>
 
 #include <Eigen/Core>
-#include <boost/circular_buffer.hpp>
 #include <csignal>
 #include <fstream>
 #include <iomanip>
 #include <mutex>
 #include <thread>
-#include <tuple>
 
 #include "list"
 #include "set"
 //#include "pandarGeneral/pandarGeneral.h"
 //#include "pandarGeneral/point_types.h"
-#include <cv_bridge/cv_bridge.h>
-#include <ros/ros.h>
-#include <sensor_msgs/Image.h>
-
-#include <opencv2/opencv.hpp>
 
 #include "BEVProcess/BEVprojector.h"
-#include "BEVProcess/bev_feature.h"
 #include "DataIO/ReadWriter.h"
 #include "Feature/FeatureExtractor.h"
 #include "Feature/PCA.hpp"
-#include "ImageProcess/imageprocess.h"
 #include "Initializer/LI_Initiator.h"
 #include "Initializer/LidMotorCalib.h"
 #include "LoopCloser/LoopCloser.h"
-#include "MLSD/mlsd.h"
 #include "Mapper/CloudBlock.h"
 #include "Mapper/IkdTree.h"
 #include "Mapper/VoxelMapper.h"
@@ -78,8 +68,6 @@
 #include "SensorProcess/LidarProcess.h"
 #include "Utility.hpp"
 #include "Viewer/Viewer.h"
-#include "patchwork/patchworkpp.h"
-#include "xfeat/XFeat.h"
 
 #ifdef __SHARED_LIBS__
 #ifdef __DLL_EXPORTS__
@@ -112,8 +100,6 @@ class SYSTEM_API System {
     bool _isImuInitialized;
     bool _isFeatExtractEn;
     bool _isEstiExtrinsic;
-    bool _isUseIntensity;
-    bool _isUseMultiview;
     int _featureExtractSegNum;
     int _minFramePoint;
     int _nSkipFrames;
@@ -128,7 +114,6 @@ class SYSTEM_API System {
     std::vector<double> _rotLICov;
     std::vector<double> _transLICov;
     bool _enableGravityAlign;
-    double _radius_k;
     double _maxInierError;
 
     int _nMaxInterations;
@@ -170,6 +155,7 @@ class SYSTEM_API System {
     int _marginSize;
 
     bool _isLoopEn;
+
     bool _issavemap;
     bool _isSaveMap;
     int _pcdSaveInterval;
@@ -201,7 +187,7 @@ class SYSTEM_API System {
       _dataAccumLength = 300;
       _rotLICov = std::vector<double>(3, 0.00005);
       _transLICov = std::vector<double>(3, 0.0005);
-      _radius_k = 3;
+
       _enableGravityAlign = true;
       _maxInierError = 1;
 
@@ -265,7 +251,6 @@ class SYSTEM_API System {
         _denseCloudMap(new PointCloudXYZI()),
         _trajCloud(new PointCloudXYZI()),
         _lidarProcessor(new LidarProcess()),
-        fout_traj(string(ROOT_DIR) + "MapResult/traj.txt", std::ios::out),
         _imuProcessor(new ImuProcess()),
         _initiatorLI(nullptr),
         _jacoRot(MatrixXd(30000, 3)),
@@ -287,6 +272,7 @@ class SYSTEM_API System {
         _Rol(Eigen::Matrix3d::Identity()),
         _Ril(Eigen::Matrix3d::Identity()),
         _isResetShow(false),
+        _rotAlign_traj(Eigen::Matrix3d::Identity()),
         _isEKFInited(false),
         _isInitMap(false),
         _isOnlineCalibFinish(false),
@@ -300,7 +286,6 @@ class SYSTEM_API System {
         _lidarBegTime(0),
         _lastImuTimestamp(-1.0),
         _lastMotorTimestamp(-1.0),
-        _Patchworkpp(patchwork_parameters),
         _timediffImuWrtLidar(0.0),
         _isTimediffSetFlg(false),
         _lidarEndTime(0),
@@ -317,28 +302,16 @@ class SYSTEM_API System {
         _isFirstFrame(true),
         _timeLastScan(0),
         _dt(0.0),
-        _mapCloudQueue(200),
-        _XFDetector(4096, 0.05, true),
         _loopCloser(nullptr),
         _isLoopCorrected(false),
         _isFirstLidarFrame(true),
         _sensorTimeDiff(0),
+        _premapPtr(new pcl::PointCloud<pcl::PointXYZI>),
         _globalMapPtr(new pcl::PointCloud<pcl::PointXYZ>),
         _globalCloudXYZPtr(new pcl::PointCloud<pcl::PointXYZ>),
         _localCloudXYZPtr(new pcl::PointCloud<pcl::PointXYZ>),
-        _sparselinecloud(new pcl::PointCloud<pcl::PointXYZI>),
-        _premapPtr(new pcl::PointCloud<pcl::PointXYZI>),
-        _curlinecloud(new pcl::PointCloud<pcl::PointXYZI>),
-        _sparseworldlinecloud(new pcl::PointCloud<pcl::PointXYZI>),
-        _matchlinecloud(new pcl::PointCloud<pcl::PointXYZI>),
-        _matchworldlinecloud(new pcl::PointCloud<pcl::PointXYZI>),
-        _matchworldlinecloudrgb(new pcl::PointCloud<pcl::PointXYZRGB>),
-        intensityMapdense(new pcl::PointCloud<pcl::PointXYZI>),
-        intensityMapdense_left(new pcl::PointCloud<pcl::PointXYZI>),
-        intensityMapdense_right(new pcl::PointCloud<pcl::PointXYZI>),
         _Twl(Eigen::Matrix4d::Identity()),
         _rotAlign(Eigen::Matrix3d::Identity()),
-        _rotAlign_traj(Eigen::Matrix3d::Identity()),
         _normvec(new PointCloudXYZI(100000, 1)),
         _cloudAxisTransfer(nullptr),
         _frameIdDisp(0),
@@ -453,8 +426,6 @@ class SYSTEM_API System {
   void transCloud3(const pcl::PointCloud<pcl::PointXYZI>::Ptr &cloudIn,
                    pcl::PointCloud<pcl::PointXYZI>::Ptr &cloudOut,
                    const Eigen::Matrix3d &Rol, const Eigen::Vector3d &tol);
-  pcl::PointCloud<pcl::PointXYZRGB>::Ptr convertPointCloudWithLines(
-      const pcl::PointCloud<pcl::PointXYZI>::Ptr &input_cloud);
 
   void transCloudInMotorAxis(const PointCloudXYZI::Ptr &cloudIn,
                              PointCloudXYZI::Ptr &cloudOut, const double &angle,
@@ -517,6 +488,7 @@ class SYSTEM_API System {
   void saveMap(bool isForced = false);
   void Savemap();
   void Savetraj();
+
   void motorMotionCompensation();
 
   void motorMotionCompensationZG();
@@ -563,25 +535,7 @@ class SYSTEM_API System {
 
   void processCloudESIKF();
 
-  cv::Mat projectToXZ(pcl::PointCloud<pcl::PointXYZI>::Ptr &cloud,
-                      bool isinter);
-
-  cv::Mat overlayRedOnGrayscale(const cv::Mat &gray1, const cv::Mat &gray2);
-
-  cv::Mat stackImagesVertical(const cv::Mat &gray1, const cv::Mat &gray2);
-
-  cv::Mat interpolateBlackRegions(const cv::Mat &inputImage);
-
-  void removeLines(cv::Mat &img);
-
-  void filterBrightness(cv::Mat &img);
-
-  void imagecreator_calib();
-  void imagecreatortest();
-  void imagecreatoropt();
-  void buildsurfmap(pcl::PointCloud<pcl::PointXYZI>::Ptr &densecloud);
   void processCloudIKFoM();
-  void processCloudIKFoM_calib();
 
   void hShareModelKdTree(state_ikfom &s,
                          esekfom::dyn_share_datastruct<double> &ekfom_data);
@@ -608,9 +562,10 @@ class SYSTEM_API System {
   void processGNSS();
 
   void mapping();
+
   void mapping_undist();
-  void mapping_calib();
   void mapping_sim();
+
   bool syncPackages(MeasureGroup &meas);
 
   void collectMotorIMU();
@@ -628,10 +583,6 @@ class SYSTEM_API System {
                         pcl::PointCloud<PointType>::Ptr &lastSubmap);
 
   bool processContinualTask(const std::string &lastTaskPath);
-
-  struct surfmaplist {
-    std::vector<cv::Mat> surfmap;
-  };
 
  public:
   static Config _config;
@@ -655,19 +606,11 @@ class SYSTEM_API System {
   int _cloudDownSize;
   int _cloudSurfDownSize;
   int _cloudCornerDownSize;
+
   PointCloudXYZI::Ptr _localCloudPtr;
   PointCloudXYZI::Ptr _localSurfCloudPtr;
   PointCloudXYZI::Ptr _localCornerCloudPtr;
-  boost::circular_buffer<PointCloudXYZI::Ptr> _mapCloudQueue;
-  cv::Mat _intensityImg;
-  cv::Mat _intensityImg_left;
-  cv::Mat _intensityImg_right;
-  pcl::PointCloud<pcl::PointXYZI>::Ptr intensityMapdense;
-  pcl::PointCloud<pcl::PointXYZI>::Ptr intensityMapdense_left;
-  pcl::PointCloud<pcl::PointXYZI>::Ptr intensityMapdense_right;
-  cv::Mat _matchImg;
-  cv::Mat _matchImg_left;
-  cv::Mat _matchImg_right;
+
   PointCloudXYZI::Ptr _localCloudDownPtr;
   PointCloudXYZI::Ptr _localSurfCloudDownPtr;
   PointCloudXYZI::Ptr _localCornerCloudDownPtr;
@@ -679,13 +622,6 @@ class SYSTEM_API System {
   PointCloudXYZI::Ptr _downCloudMap;
   PointCloudXYZI::Ptr _denseCloudMap;
   PointCloudXYZI::Ptr _trajCloud;
-  pcl::PointCloud<pcl::PointXYZI>::Ptr _sparselinecloud;
-  pcl::PointCloud<pcl::PointXYZI>::Ptr _curlinecloud;
-  pcl::PointCloud<pcl::PointXYZI>::Ptr _sparseworldlinecloud;
-  pcl::PointCloud<pcl::PointXYZI>::Ptr _matchlinecloud;
-  pcl::PointCloud<pcl::PointXYZI>::Ptr _matchworldlinecloud;
-  pcl::PointCloud<pcl::PointXYZRGB>::Ptr _matchworldlinecloudrgb;
-  cv::Mat _cannyimg;
 
   vector<PointVector> _nearestPoints;
   PointVector _addedPoints;
@@ -696,13 +632,7 @@ class SYSTEM_API System {
   shared_ptr<LidarProcess> _lidarProcessor;
   shared_ptr<ImuProcess> _imuProcessor;
   shared_ptr<ImuPreintegration> _imuPreintegration;
-  XFeat::XFDetector _XFDetector;
-  imgProcesser _imgProcesser;
-  cv::Mat _mkpts_0;
-  cv::Mat _mkpts_1;
-  cv::Mat _scanlineIdMap;
-  surfmaplist _surfmaplist;
-  std::unordered_map<VOXEL_LOC, Voxel *> _sparsevoxelmap;
+
   // raster angle
   double _curMotorAngle;
   double _initMotorAngle;
@@ -723,12 +653,9 @@ class SYSTEM_API System {
   // Lidar pose
   Eigen::Matrix3d _Rwl;
   Eigen::Vector3d _twl;
-  Eigen::Matrix3d _Rwlprop;
-  Eigen::Vector3d _twlprop;
-  Eigen::Matrix3d _Rl2l;
-  Eigen::Vector3d _tl2l;
   Eigen::Matrix4d _prevTwl;
-  std::ofstream fout_traj;
+
+  Eigen::Matrix3d _rotAlign_traj;
 
   std::vector<Eigen::Matrix4d> _relToList;
   std::vector<Eigen::Matrix4d> _relTlList;
@@ -742,12 +669,9 @@ class SYSTEM_API System {
   shared_ptr<LI_Init> _initiatorLI;
 
   MatrixXd _jacoRot;
-  MD(DIM_STATE, DIM_STATE)
-  _G;
-  MD(DIM_STATE, DIM_STATE)
-  _H_T_H;
-  MD(DIM_STATE, DIM_STATE)
-  _I_STATE;
+  MD(DIM_STATE, DIM_STATE) _G;
+  MD(DIM_STATE, DIM_STATE) _H_T_H;
+  MD(DIM_STATE, DIM_STATE) _I_STATE;
 
   MeasureGroup _measures;
   StatesGroup _stateCur;
@@ -771,10 +695,11 @@ class SYSTEM_API System {
 
   int _scanNum;
 
+  std::shared_ptr<BEVProjector> projectormap;
+  std::shared_ptr<BEVProjector> projectorcurrent;
+
   std::deque<double> _timeBuffer;
   std::deque<PointCloudXYZI::Ptr> _lidarBuffer;
-  std::deque<PointCloudXYZI::Ptr> _mapBuffer;
-  std::deque<PointCloudXYZI::Ptr> _cloudBuffer;
   std::deque<SensorMsgs::ImuData::Ptr> _imuBuffer;
   std::list<pair<double, double>> _motorAngleBuf;
   std::deque<SensorMsgs::GNSSData::Ptr> _gpsBuffer;
@@ -853,21 +778,6 @@ class SYSTEM_API System {
   std::vector<PointWithCov> _curSurfPvList;
   std::vector<PointWithCov> _curCornerPvList;
   std::vector<BoxPointType> _boxToDel;
-  std::vector<std::vector<int>> _linelist;
-  std::vector<std::vector<int>> _linelist_left;
-  std::vector<std::vector<int>> _linelist_right;
-  std::vector<Matchlinelist> _matchlinelist;
-  std::vector<Matchlinelist> _matchlinelist_left;
-  std::vector<Matchlinelist> _matchlinelist_right;
-
-  std::shared_ptr<BEVProjector> projectormap;
-  std::shared_ptr<BEVProjector> projectorcurrent;
-  std::shared_ptr<BEVFeatureManager> bev_manager;
-  BEVFrame map_frame;
-  patchwork::Params patchwork_parameters;
-  patchwork::PatchWorkpp _Patchworkpp;
-
-  std::string _map_path;
 
   LoopCloser *_loopCloser;
   bool _isLoopCorrected;
@@ -876,8 +786,6 @@ class SYSTEM_API System {
   double _sensorTimeDiff;
 
   bool _isFinished;
-
-  pcl::PointCloud<pcl::PointXYZI>::Ptr _premapPtr;
 
   pcl::PointCloud<pcl::PointXYZ>::Ptr _globalMapPtr;
   pcl::PointCloud<pcl::PointXYZ>::Ptr _globalCloudXYZPtr;
@@ -889,10 +797,16 @@ class SYSTEM_API System {
 
   Eigen::Vector3d _globalGrav;
   Eigen::Matrix3d _rotAlign;
-  Eigen::Matrix3d _rotAlign_traj;
+  BEVFrame map_frame;
+  std::deque<PointCloudXYZI::Ptr> _cloudBuffer;
   PointCloudXYZI::Ptr _normvec;
+  pcl::PointCloud<pcl::PointXYZI>::Ptr _premapPtr;
   bool *_isPointSelectedSurf;
   float *_resLast;
+
+  std::deque<PointCloudXYZI::Ptr> _mapBuffer;
+
+  std::string _map_path;
 
   std::set<OctoTree *> _voxelCovUpdated;
 

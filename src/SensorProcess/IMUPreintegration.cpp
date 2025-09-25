@@ -103,7 +103,7 @@ void ImuPreintegration::optimizeOdometry(StatesGroup &odomState, const double& c
     }
 
 
-    // reset graph for speed                                                                                                                                                                                                                                                                                                             
+    // reset graph for speed
     if (_key == 100)
     {
         // get updated noise before reset

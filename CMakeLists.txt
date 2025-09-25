@@ -112,7 +112,7 @@ option(BA_ENABLE "Enable mapping with bundle adjustment" OFF)
 option(TEASER_ON "Enable teaser registration" OFF)
 option(CERES_ON "Enable ceres optimization" ON)
 option(G2O_ON "Enable g2o optimization" OFF)
-option(GTSAM_ON "Enable gtsam optimization" OFF)
+option(GTSAM_ON "Enable gtsam optimization" ON)
 
 find_program(CCACHE_PROGRAM ccache)
 
@@ -180,10 +180,8 @@ find_package(OpenMP QUIET)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}   ${OpenMP_C_FLAGS}")
 
-find_package(re2 QUIET)
-if(NOT re2_FOUND)
-  find_library(RE2_LIBRARY re2)
-endif()
+
+SET(cv_bridge_LIBRARIES "/opt/ros/noetic/lib/libcv_bridge.so")
 
 macro(source_group_by_dir source_files)
     if(MSVC)
@@ -203,35 +201,20 @@ macro(source_group_by_dir source_files)
         endforeach(sgbd_file)
     endif(MSVC)
 endmacro(source_group_by_dir)
-set(cv_bridge_DIR "/opt/ros/noetic/share/cv_bridge/cmake")
+
+
 find_package(cv_bridge REQUIRED)
+
 find_package(PythonLibs REQUIRED)
 # find_path(MATPLOTLIB_CPP_INCLUDE_DIRS "matplotlibcpp.h")
 find_package(PCL 1.7 REQUIRED)
-message(STATUS "Found PCL version: ${PCL_VERSION}")
-
 find_package(Ceres REQUIRED)
-message(STATUS "Found Ceres version: ${Ceres_VERSION}")
-
 find_package(yaml-cpp REQUIRED)
-message(STATUS "Found yaml-cpp version: ${YAML_CPP_VERSION}")
-
 find_package(Eigen3 REQUIRED)
-message(STATUS "Found Eigen3 version: ${EIGEN3_VERSION}")
-
 find_package(GTSAM REQUIRED QUIET)
-message(STATUS "Found GTSAM version: ${GTSAM_VERSION}")
-#set(CMAKE_PREFIX_PATH "/home/zzy/SLAM/xfeat_cpp/thirdparty/pytorch/torch")
-message(111: ${cv_bridge_DIR})
-#find_package(Torch REQUIRED)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
 #set(CMAKE_PREFIX_PATH "/home/zg/depends/opencv-4.5.5/install")
 find_package(OpenCV REQUIRED QUIET)
-
-set(Torch_DIR "/home/zzy/Downloads/libtorch-cxx11-abi-shared-with-deps-2.7.0+cu118/libtorch")
-set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} "/home/zzy/Downloads/libtorch-cxx11-abi-shared-with-deps-2.7.0+cu118/libtorch")
-find_package(Torch REQUIRED)
-
+#message(opencv: ${OpenCV_INCLUDE_DIRS})
 
 add_subdirectory(3rdParty/HesaiLidar_General_SDK)
 
@@ -241,8 +224,6 @@ if(GTSAM_ON)
     link_directories(${GTSAM_LIBRARY_DIRS})
     set(GTSAM_LIBRARIES gtsam)
 endif()
-
-set(ONNXRUNTIME_DIR  "/home/zzy/Downloads/onnxruntime")
 
 include_directories(
         include/DataIO
@@ -259,33 +240,20 @@ include_directories(
         include/Registrator/fast_gicp
         include/SensorProcess
         include/Viewer
-        include/xfeat
-        include/ImageProcess
-        include/MLSD
         include/BEVProcess
-        include/patchwork
         ${EIGEN3_INCLUDE_DIR}
         ${PCL_INCLUDE_DIRS}
         ${CERES_INCLUDE_DIRS}
         ${GTSAM_INCLUDE_DIR}
         ${PYTHON_INCLUDE_DIRS}
         ${YAML_CPP_INCLUDE_DIR}
-        ${OpenCV_INCLUDE_DIRS}
         ${cv_bridge_INCLUDE_DIRS}
-        ${ONNXRUNTIME_DIR}/include
-        ${ONNXRUNTIME_DIR}/include/onnxruntime/core/session
-        ${ONNXRUNTIME_DIR}/include/onnxruntime/core/providers/cuda
+        ${OpenCV_INCLUDE_DIRS}
         3rdParty/HesaiLidar_General_SDK/include
-        ${TORCH_INCLUDE_DIRS}
-        /home/zzy/Downloads/libtorch-cxx11-abi-shared-with-deps-2.7.0+cu118/libtorch/include
-        /home/zzy/Downloads/libtorch-cxx11-abi-shared-with-deps-2.7.0+cu118/libtorch/include/torch/csrc/api/include
         include
-
 )
 
 #file(GLOB_RECURSE CORE_SRC "src/*.cpp" "src/*.cc" "src/*.c")
-link_directories("${ONNXRUNTIME_ROOT}/lib")
-
 
 
 file(GLOB_RECURSE DataIO_SRC "src/DataIO/*.cpp")
@@ -318,6 +286,8 @@ add_library(Misc SHARED ${Misc_SRC})
 target_link_libraries(Misc ${PCL_LIBRARIES})
 target_compile_definitions(Misc PRIVATE $<$<CXX_COMPILER_ID:MSVC>:__DLL_EXPORTS__>)
 
+
+
 file(GLOB_RECURSE Optimizer_SRC "src/Optimizer/*.cpp")
 add_library(Optimizer SHARED ${Optimizer_SRC})
 target_link_libraries(Optimizer Mapper Misc ${PCL_LIBRARIES} ${PTHREADS_LIBRARY} ${CERES_LIBRARIES} gtsam)
@@ -336,11 +306,6 @@ add_library(SensorProcess SHARED ${SensorProcess_SRC})
 target_link_libraries(SensorProcess Mapper Misc ${PCL_LIBRARIES} ${PTHREADS_LIBRARY} ${CERES_LIBRARIES} gtsam)
 target_compile_definitions(SensorProcess PRIVATE $<$<CXX_COMPILER_ID:MSVC>:__DLL_EXPORTS__>)
 
-file(GLOB_RECURSE BEVProcess_SRC "src/BEVProcess/*.cpp")
-add_library(BEVProcess SHARED ${BEVProcess_SRC})
-target_link_libraries(BEVProcess Mapper Misc ${PCL_LIBRARIES} ${PTHREADS_LIBRARY} ${CERES_LIBRARIES} ${OpenCV_LIBRARIES} gtsam)
-target_compile_definitions(BEVProcess PRIVATE $<$<CXX_COMPILER_ID:MSVC>:__DLL_EXPORTS__>)
-
 file(GLOB_RECURSE Viewer_SRC "src/Viewer/*.cpp")
 add_library(Viewer SHARED ${Viewer_SRC})
 target_link_libraries(Viewer Misc Mapper ${PCL_LIBRARIES} ${PTHREADS_LIBRARY})
@@ -351,27 +316,13 @@ add_library(LoopCloser SHARED ${LoopCloser_SRC})
 target_link_libraries(LoopCloser Misc Mapper Registrator Feature Optimizer DataIO ${PCL_LIBRARIES} ${PTHREADS_LIBRARY} ${CERES_LIBRARIES} gtsam)
 target_compile_definitions(LoopCloser PRIVATE $<$<CXX_COMPILER_ID:MSVC>:__DLL_EXPORTS__>)
 
-file(GLOB_RECURSE xfeat_SRC "src/xfeat/*.cpp")
-add_library(xfeat SHARED ${xfeat_SRC})
-target_link_libraries(xfeat ${OpenCV_LIBS} ${TORCH_LIBRARIES} Misc Mapper Registrator Feature Optimizer DataIO ${PCL_LIBRARIES} ${PTHREADS_LIBRARY} ${CERES_LIBRARIES} gtsam)
-target_compile_definitions(xfeat PRIVATE $<$<CXX_COMPILER_ID:MSVC>:__DLL_EXPORTS__>)
+file(GLOB_RECURSE BEVProcess_SRC "src/BEVProcess/*.cpp")
+add_library(BEVProcess SHARED ${BEVProcess_SRC})
+target_link_libraries(BEVProcess Mapper Misc ${PCL_LIBRARIES} ${PTHREADS_LIBRARY} ${CERES_LIBRARIES} ${OpenCV_LIBRARIES} gtsam)
+target_compile_definitions(BEVProcess PRIVATE $<$<CXX_COMPILER_ID:MSVC>:__DLL_EXPORTS__>)
 
-file(GLOB_RECURSE mlsd_SRC "src/MLSD/*.cpp")
-add_library(mlsd SHARED ${mlsd_SRC})
-target_link_libraries(mlsd ${OpenCV_LIBS} onnxruntime re2 ${PCL_LIBRARIES})
-target_compile_definitions(mlsd PRIVATE $<$<CXX_COMPILER_ID:MSVC>:__DLL_EXPORTS__>)
+set(cv_bridge_DIR "/opt/ros/noetic/share/cv_bridge/cmake")
 
-file(GLOB_RECURSE imgp_SRC "src/ImageProcess/*.cpp")
-add_library(imgp SHARED ${imgp_SRC})
-target_link_libraries(imgp ${OpenCV_LIBS} ${PCL_LIBRARIES} Mapper mlsd) 
-target_compile_definitions(imgp PRIVATE $<$<CXX_COMPILER_ID:MSVC>:__DLL_EXPORTS__>)
-
-file(GLOB_RECURSE imgp_SRC "src/patchwork/*.cpp")
-add_library(patchwork SHARED ${imgp_SRC})
-target_link_libraries(patchwork ${OpenCV_LIBS} ${PCL_LIBRARIES} Mapper mlsd) 
-target_compile_definitions(patchwork PRIVATE $<$<CXX_COMPILER_ID:MSVC>:__DLL_EXPORTS__>)
-
-SET(cv_bridge_LIBRARIES "/opt/ros/noetic/lib/libcv_bridge.so")
 #file(GLOB_RECURSE SlamSys_SRC "src/System.cpp")
 if(MSVC)
     file(GLOB_RECURSE CORE_HDR "include/*.hpp" "include/*.h")
@@ -389,8 +340,6 @@ if(MSVC)
             ${LoopCloser_SRC}
             ${CORE_HDR}
             ${cv_bridge_LIBRARIES})
-            
-            
 else()
     add_library(SlamCore
             SHARED
@@ -400,8 +349,8 @@ else()
             "src/System/System-utils.cpp")
 endif()
 
-target_link_libraries(SlamCore mlsd  xfeat imgp SensorProcess patchwork DataIO Feature BEVProcess Initializer LoopCloser Mapper Matcher Misc Optimizer Registrator Viewer 
-${PCL_LIBRARIES} ${PCAP_LIBRARIES} ${TORCH_LIBRARIES} ${PTHREADS_LIBRARY} ${CERES_LIBRARIES} ${GTSAM_LIBRARIES} ${YAML_CPP_LIBRARIES} ${OpenCV_LIBRARIES}  ${cv_bridge_LIBRARIES} PandarGeneralSDK )
+target_link_libraries(SlamCore SensorProcess BEVProcess DataIO Feature Initializer LoopCloser Mapper Matcher Misc Optimizer Registrator Viewer 
+${PCL_LIBRARIES} ${PCAP_LIBRARIES} ${PTHREADS_LIBRARY} ${CERES_LIBRARIES} ${GTSAM_LIBRARIES} ${YAML_CPP_LIBRARIES} ${OpenCV_LIBRARIES}  ${cv_bridge_LIBRARIES} PandarGeneralSDK)
 
 target_compile_definitions(SlamCore PRIVATE $<$<CXX_COMPILER_ID:MSVC>:__DLL_EXPORTS__>)
 
@@ -452,13 +401,10 @@ target_link_libraries(Sim SlamCore Misc ${PTHREADS_LIBRARY} ${catkin_LIBRARIES} 
 
 add_executable(Reloc Examples/Reloc.cpp)
 target_link_libraries(Reloc SlamCore Misc  ${PTHREADS_LIBRARY} ${catkin_LIBRARIES} ${cv_bridge_LIBRARIES})
-endif()
-
-
 
 #add_executable(RosSlamTest Examples/RosSlamTest.cpp)
 #target_link_libraries(RosSlamTest SlamCore ${PTHREADS_LIBRARY} ${catkin_LIBRARIES})
-
+endif()
 
 #add_executable(AlignTest Examples/AlignTest.cpp)
 #target_link_libraries(AlignTest SlamCore Misc ${PTHREADS_LIBRARY} ${catkin_LIBRARIES})

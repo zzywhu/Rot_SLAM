@@ -1133,7 +1133,7 @@ void buildVoxelMap(const std::vector<PointWithCov> &inputPoints,
             featMap[position]->_newPointsNum++;
             featMap[position]->_allPointsNum++;
         }
-        else //new octo
+        else
         {
             OctoTree *octoTree = new OctoTree(frameId, pv.featType, maxLayer, 0, layerPointSize, maxPointsSize, maxCovPointsSize, featThreshold);
             featMap[position] = octoTree;
@@ -1268,11 +1268,11 @@ neighborOffsets(NeighborSearchMethod search_method)
 void buildSingleResidual(const PointWithCov &pv, OctoTree *currentOcto,
                          const int currentLayer, const int maxLayers,
                          const double sigmaNum, bool &isSucess,
-                         double &prob, MatchOctoTreeInfo &singlePtpl, bool isStrict,double radius_k)
+                         double &prob, MatchOctoTreeInfo &singlePtpl, bool isStrict)
 {
-    //radius_k = 1; //1 for stair building 3 for normal scene
+    double radius_k = 3;
     Eigen::Vector3d p_w = pv.pw;
-    //std::cout<<radius_k<<std::endl;
+
     if (currentOcto->_planePtr->isPlane)
     {
         PlaneParams &plane = *currentOcto->_planePtr;
@@ -1336,7 +1336,7 @@ void buildSingleResidual(const PointWithCov &pv, OctoTree *currentOcto,
                 {
                     OctoTree *leaf_octo = currentOcto->_leaves[leafnum];
                     buildSingleResidual(pv, leaf_octo, currentLayer + 1, maxLayers,
-                                        sigmaNum, isSucess, prob, singlePtpl, isStrict,radius_k);
+                                        sigmaNum, isSucess, prob, singlePtpl, isStrict);
                 }
             }
             return;
@@ -1360,9 +1360,7 @@ void buildResidualListOmp(const std::unordered_map<VOXEL_LOC, OctoTree *> &voxel
                           std::vector<MatchOctoTreeInfo> &ptpl_list,
                           std::vector<Eigen::Vector3d> &non_match,
                           bool isStrict,
-                          double radius_k,
-                          NeighborSearchMethod searchMethod
-                        )
+                          NeighborSearchMethod searchMethod)
 {
     std::mutex mylock;
     ptpl_list.clear();
@@ -1407,7 +1405,7 @@ void buildResidualListOmp(const std::unordered_map<VOXEL_LOC, OctoTree *> &voxel
             MatchOctoTreeInfo single_ptpl;
             bool is_sucess = false;
             double prob = 0;
-            buildSingleResidual(pv, voxel, 0, max_layers, sigma_num, is_sucess, prob, single_ptpl, isStrict,radius_k);
+            buildSingleResidual(pv, voxel, 0, max_layers, sigma_num, is_sucess, prob, single_ptpl, isStrict);
             if (!is_sucess)
             {
                 VOXEL_LOC near_position = position;
@@ -1425,7 +1423,7 @@ void buildResidualListOmp(const std::unordered_map<VOXEL_LOC, OctoTree *> &voxel
                     near_position.z = near_position.z - 1;
                 auto iter_near = voxel_map.find(near_position);
                 if (iter_near != voxel_map.end())
-                    buildSingleResidual(pv, iter_near->second, 0, max_layers, sigma_num, is_sucess, prob, single_ptpl, isStrict,radius_k);
+                    buildSingleResidual(pv, iter_near->second, 0, max_layers, sigma_num, is_sucess, prob, single_ptpl, isStrict);
             }
             if (is_sucess)
             {
@@ -1474,7 +1472,7 @@ void buildResidualListNormal(const std::unordered_map<VOXEL_LOC, OctoTree *> &vo
             bool is_sucess = false;
             double prob = 0;
             buildSingleResidual(pv, current_octo, 0, max_layers, sigma_num,
-                                is_sucess, prob, single_ptpl,3);
+                                is_sucess, prob, single_ptpl);
 
             if (!is_sucess)
             {
@@ -1494,7 +1492,7 @@ void buildResidualListNormal(const std::unordered_map<VOXEL_LOC, OctoTree *> &vo
 
                 auto iter_near = voxel_map.find(near_position);
                 if (iter_near != voxel_map.end())
-                    buildSingleResidual(pv, iter_near->second, 0, max_layers, sigma_num, is_sucess, prob, single_ptpl,3);
+                    buildSingleResidual(pv, iter_near->second, 0, max_layers, sigma_num, is_sucess, prob, single_ptpl);
             }
             if (is_sucess)
                 ptpl_list.push_back(single_ptpl);

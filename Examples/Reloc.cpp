@@ -233,7 +233,6 @@ void setParams() {
   _sys->_config._bGyrCov = 0.0001;
   _sys->_config._timeLagIMUWtrLidar = 0;
   _sys->_config._isEstiExtrinsic = false;
-  _sys->_config._isUseIntensity = false;
   _sys->_config._gnssMaxError = 5;
 
   double tilVec[] = {0, 0, 0};
@@ -300,7 +299,6 @@ void setParams() {
 void loadRosParams(ros::NodeHandle &nh) {
   nh.param<double>("rigelslam_rot/minRange",
                    LidarProcess::mutableConfig()._blindMin, 0);
-  nh.param<double>("rigelslam_rot/ridus_k", _sys->_config._radius_k, 3);
   nh.param<double>("rigelslam_rot/maxRange",
                    LidarProcess::mutableConfig()._blindMax, 0);
   nh.param<int>("rigelslam_rot/scanLines",
@@ -329,10 +327,7 @@ void loadRosParams(ros::NodeHandle &nh) {
       "/home/w/code/fast_lio_win/src/config/zg_equipment_param.txt");
   nh.param<std::string>("rigelslam_rot/saveRawPath", _saveRawPath, "/tmp/");
   nh.param<std::string>("rigelslam_rot/scanSceneName", _scanScene, "");
-  nh.param<bool>("rigelslam_rot/usemutiview", _sys->_config._isUseMultiview,
-                 false);
-  nh.param<bool>("rigelslam_rot/useintensity", _sys->_config._isUseIntensity,
-                 false);
+
   nh.param<bool>("rigelslam_rot/loopClosureEnableFlag", _sys->_config._isLoopEn,
                  false);
   nh.param<bool>("rigelslam_rot/saveMap", _sys->_config._issavemap, false);
@@ -385,9 +380,6 @@ int main(int argc, char **argv) {
 
   _sys->projectormap = std::make_shared<BEVProjector>(_nh);
   _sys->projectorcurrent = std::make_shared<BEVProjector>(_nh);
-
-  _sys->bev_manager =
-      std::make_shared<BEVFeatureManager>(_nh, _sys->projectormap);
 
   if (!_sys->initSystem()) {
     std::cerr << "System initializing failed!" << std::endl;
@@ -549,28 +541,40 @@ int main(int argc, char **argv) {
               current_frame.header = current_header;
               _sys->projectorcurrent->getMapBEV(current_frame);
 
-              // ... (后续的XFeat匹配, RANSAC, GICP等逻辑保持不变) ...
-              // 4. 使用系统中的 XFeat 进行特征匹配
-              std::cout << "Starting XFeat matching with system detector..."
+              // 4. 使用 ORB 进行特征提取与匹配
+              std::cout << "Starting ORB matching..." << std::endl;
+              cv::Ptr<cv::ORB> orb = cv::ORB::create(1000);
+              std::vector<cv::KeyPoint> kp_current, kp_map;
+              cv::Mat desc_current, desc_map;
+              orb->detectAndCompute(current_frame.img_dense, cv::noArray(),
+                                    kp_current, desc_current);
+              orb->detectAndCompute(local_map_frame.img_dense, cv::noArray(),
+                                    kp_map, desc_map);
+              std::vector<cv::DMatch> matches;
+              if (!desc_current.empty() && !desc_map.empty()) {
+                cv::BFMatcher matcher(cv::NORM_HAMMING);
+                matcher.match(desc_current, desc_map, matches);
+                std::sort(matches.begin(), matches.end(),
+                          [](const cv::DMatch &a, const cv::DMatch &b) {
+                            return a.distance < b.distance;
+                          });
+                if (matches.size() > 50)
+                  matches.resize(50);  // 只取前50个最佳匹配
+              }
+              std::cout << "ORB found " << matches.size() << " initial matches"
                         << std::endl;
-              cv::Mat mkpts_0, mkpts_1;
-              _sys->_XFDetector.match_xfeat(current_frame.img_dense,
-                                            local_map_frame.img_dense, mkpts_0,
-                                            mkpts_1);
-              std::cout << "XFeat found " << mkpts_0.rows << " initial matches"
-                        << std::endl;
+
+              // 转换为 vector<Point2f> 格式
+              std::vector<cv::Point2f> pts_current, pts_map;
+              for (const auto &m : matches) {
+                pts_current.push_back(kp_current[m.queryIdx].pt);
+                pts_map.push_back(kp_map[m.trainIdx].pt);
+              }
 
               // 5. 如果有足够的匹配点，进行RANSAC粗差剔除
-              if (mkpts_0.rows > 10) {
-                std::cout << "Processing " << mkpts_0.rows
-                          << " XFeat matches with RANSAC..." << std::endl;
-
-                // 转换为 vector<Point2f> 格式，按照示例的方式
-                std::vector<cv::Point2f> pts_current, pts_map;
-                for (int i = 0; i < mkpts_0.rows; ++i) {
-                  pts_current.push_back(mkpts_0.at<cv::Point2f>(i, 0));
-                  pts_map.push_back(mkpts_1.at<cv::Point2f>(i, 0));
-                }
+              if (pts_current.size() > 10) {
+                std::cout << "Processing " << pts_current.size()
+                          << " ORB matches with RANSAC..." << std::endl;
 
                 // 使用 RANSAC 估计 Homography（按照示例方式）
                 cv::Mat mask;
@@ -592,13 +596,11 @@ int main(int argc, char **argv) {
                     std::vector<cv::DMatch> good_matches;
 
                     int match_idx = 0;
-                    for (int i = 0; i < mkpts_0.rows; ++i) {
+                    for (int i = 0; i < matches.size(); ++i) {
                       if (mask.at<uchar>(i, 0)) {  // 只处理内点
-                        cv::Point2f pt_current = mkpts_0.at<cv::Point2f>(i, 0);
-                        cv::Point2f pt_map = mkpts_1.at<cv::Point2f>(i, 0);
-
-                        keypoints_current.emplace_back(pt_current, 5);
-                        keypoints_map.emplace_back(pt_map, 5);
+                        keypoints_current.push_back(
+                            kp_current[matches[i].queryIdx]);
+                        keypoints_map.push_back(kp_map[matches[i].trainIdx]);
                         good_matches.emplace_back(match_idx, match_idx, 0);
                         match_idx++;
                       }
@@ -618,7 +620,7 @@ int main(int argc, char **argv) {
                       // 在图像上添加文本信息
                       std::string info_text =
                           "Inliers: " + std::to_string(num_inliers) + "/" +
-                          std::to_string(mkpts_0.rows);
+                          std::to_string(pts_current.size());
                       cv::putText(img_matches, info_text, cv::Point(10, 30),
                                   cv::FONT_HERSHEY_SIMPLEX, 1,
                                   cv::Scalar(0, 255, 0), 2);
@@ -635,12 +637,10 @@ int main(int argc, char **argv) {
                     std::vector<cv::KeyPoint> keypoints_current, keypoints_map;
                     std::vector<cv::DMatch> all_matches;
 
-                    for (int i = 0; i < mkpts_0.rows; ++i) {
-                      cv::Point2f pt_current = mkpts_0.at<cv::Point2f>(i, 0);
-                      cv::Point2f pt_map = mkpts_1.at<cv::Point2f>(i, 0);
-
-                      keypoints_current.emplace_back(pt_current, 5);
-                      keypoints_map.emplace_back(pt_map, 5);
+                    for (int i = 0; i < matches.size(); ++i) {
+                      keypoints_current.push_back(
+                          kp_current[matches[i].queryIdx]);
+                      keypoints_map.push_back(kp_map[matches[i].trainIdx]);
                       all_matches.emplace_back(i, i, 0);
                     }
 
@@ -654,7 +654,7 @@ int main(int argc, char **argv) {
 
                     std::string warning_text =
                         "Poor matches: " + std::to_string(num_inliers) + "/" +
-                        std::to_string(mkpts_0.rows);
+                        std::to_string(pts_current.size());
                     cv::putText(img_matches, warning_text, cv::Point(10, 30),
                                 cv::FONT_HERSHEY_SIMPLEX, 1,
                                 cv::Scalar(0, 0, 255), 2);
@@ -694,14 +694,14 @@ int main(int argc, char **argv) {
                     std::vector<cv::Point2f> inlier_curr, inlier_map;
                     inlier_curr.reserve(num_inliers);
                     inlier_map.reserve(num_inliers);
-                    for (int i = 0; i < mkpts_0.rows; ++i) {
+                    for (int i = 0; i < matches.size(); ++i) {
                       if (mask.at<uchar>(i, 0)) {
                         inlier_curr.push_back(
                             _sys->projectorcurrent->backProjectBEVPixelToXY(
-                                mkpts_0.at<cv::Point2f>(i, 0)));
+                                kp_current[matches[i].queryIdx].pt));
                         inlier_map.push_back(
                             _sys->projectormap->backProjectBEVPixelToXY(
-                                mkpts_1.at<cv::Point2f>(i, 0)));
+                                kp_map[matches[i].trainIdx].pt));
                       }
                     }
                     //打印所有内点点对
@@ -865,13 +865,12 @@ int main(int argc, char **argv) {
                               << num_inliers << std::endl;
                   }
                 } else {
-                  std::cout
-                      << "Failed to estimate Homography with XFeat matches"
-                      << std::endl;
+                  std::cout << "Failed to estimate Homography with ORB matches"
+                            << std::endl;
                 }
               } else {
-                std::cout << "Not enough XFeat matches for RANSAC: "
-                          << mkpts_0.rows << std::endl;
+                std::cout << "Not enough ORB matches for RANSAC: "
+                          << pts_current.size() << std::endl;
               }
               // 如果已经完全定位，则跳出角度搜索循环
               if (is_fully_localized) {

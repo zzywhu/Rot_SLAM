@@ -71,19 +71,6 @@ public:
     }
 };
 
-typedef struct Voxel
-{
-    float size;
-    Eigen::Vector3d voxel_origin;
-    Eigen::Vector3d voxel_color;
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud;
-    Voxel(float _size) : size(_size)
-    {
-        voxel_origin << 0, 0, 0;
-        cloud = pcl::PointCloud<pcl::PointXYZI>::Ptr(new pcl::PointCloud<pcl::PointXYZI>);
-    };
-} Voxel;
-
 struct M_POINT
 {
     float xyz[3];
@@ -421,7 +408,7 @@ void VOXEL_MAP_UTIL_API updateVoxelMap(const std::vector<PointWithCov> &inputPoi
 void buildSingleResidual(const PointWithCov &pv, OctoTree *currentOcto,
                          const int currentLayer, const int maxLayers,
                          const double sigmaNum, bool &isSucess,
-                         double &prob, MatchOctoTreeInfo &singlePtpl, bool isStrict = true,double radius_k=3);
+                         double &prob, MatchOctoTreeInfo &singlePtpl, bool isStrict = true);
 
 
 void VOXEL_MAP_UTIL_API buildResidualListOmp(const std::unordered_map<VOXEL_LOC, OctoTree *> &voxel_map,
@@ -432,9 +419,7 @@ void VOXEL_MAP_UTIL_API buildResidualListOmp(const std::unordered_map<VOXEL_LOC,
                                              std::vector<MatchOctoTreeInfo> &ptpl_list,
                                              std::vector<Eigen::Vector3d> &non_match,
                                              bool isStrict = true,
-                                             double radius_k=3,
-                                             NeighborSearchMethod searchMethod = NeighborSearchMethod::DIRECT1
-                                           );
+                                             NeighborSearchMethod searchMethod = NeighborSearchMethod::DIRECT1);
 
 void VOXEL_MAP_UTIL_API buildResidualListNormal(const std::unordered_map<VOXEL_LOC, OctoTree *> &voxel_map,
                                                 const double voxel_size, const double sigma_num, const int max_layers,

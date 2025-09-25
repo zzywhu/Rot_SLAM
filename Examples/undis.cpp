@@ -160,109 +160,6 @@ void RGBpointBodyLidarToIMU(PointType const* const pi, PointType* const po) {
   po->intensity = pi->intensity;
 }
 
-void publishImage(const ros::Publisher& pubImage) {
-  // 确保图像有效
-  if (_sys->_matchImg.empty()) {
-    ROS_ERROR("Input image is empty!");
-    return;
-  }
-  // 根据图像通道数选择编码格式
-  std::string encoding;
-  if (_sys->_matchImg.type() == CV_8UC1) {
-    encoding = "mono8";  // 单通道灰度图
-  } else if (_sys->_matchImg.type() == CV_8UC3) {
-    encoding = "bgr8";  // 三通道彩色图
-  } else {
-    ROS_ERROR("Unsupported image type: %d", _sys->_matchImg.type());
-    return;
-  }
-  // 创建 sensor_msgs::Image 消息
-  sensor_msgs::ImagePtr img_msg =
-      cv_bridge::CvImage(std_msgs::Header(), encoding, _sys->_matchImg)
-          .toImageMsg();
-
-  // 创建 Image 消息
-  // sensor_msgs::ImagePtr img_msg = cv_bridge::CvImage(std_msgs::Header(),
-  // "mono8", _sys->_intensityImg).toImageMsg();
-
-  // 设置时间戳
-  img_msg->header.stamp = ros::Time().fromSec(_sys->_lidarEndTime);
-
-  // 设置坐标系 ID
-  img_msg->header.frame_id = "odom";
-
-  // 发布图像
-  pubImage.publish(img_msg);
-}
-void publishImage_left(const ros::Publisher& pubImage) {
-  // 确保图像有效
-  if (_sys->_matchImg.empty()) {
-    ROS_ERROR("Input image is empty!");
-    return;
-  }
-  // 根据图像通道数选择编码格式
-  std::string encoding;
-  if (_sys->_matchImg.type() == CV_8UC1) {
-    encoding = "mono8";  // 单通道灰度图
-  } else if (_sys->_matchImg.type() == CV_8UC3) {
-    encoding = "bgr8";  // 三通道彩色图
-  } else {
-    ROS_ERROR("Unsupported image type: %d", _sys->_matchImg.type());
-    return;
-  }
-  // 创建 sensor_msgs::Image 消息
-  sensor_msgs::ImagePtr img_msg =
-      cv_bridge::CvImage(std_msgs::Header(), encoding, _sys->_matchImg_left)
-          .toImageMsg();
-
-  // 创建 Image 消息
-  // sensor_msgs::ImagePtr img_msg = cv_bridge::CvImage(std_msgs::Header(),
-  // "mono8", _sys->_intensityImg).toImageMsg();
-
-  // 设置时间戳
-  img_msg->header.stamp = ros::Time().fromSec(_sys->_lidarEndTime);
-
-  // 设置坐标系 ID
-  img_msg->header.frame_id = "odom";
-
-  // 发布图像
-  pubImage.publish(img_msg);
-}
-void publishImage_right(const ros::Publisher& pubImage) {
-  // 确保图像有效
-  if (_sys->_matchImg_right.empty()) {
-    ROS_ERROR("Input image is empty!");
-    return;
-  }
-  // 根据图像通道数选择编码格式
-  std::string encoding;
-  if (_sys->_matchImg_right.type() == CV_8UC1) {
-    encoding = "mono8";  // 单通道灰度图
-  } else if (_sys->_matchImg_right.type() == CV_8UC3) {
-    encoding = "bgr8";  // 三通道彩色图
-  } else {
-    ROS_ERROR("Unsupported image type: %d", _sys->_matchImg_right.type());
-    return;
-  }
-  // 创建 sensor_msgs::Image 消息
-  sensor_msgs::ImagePtr img_msg =
-      cv_bridge::CvImage(std_msgs::Header(), encoding, _sys->_matchImg_right)
-          .toImageMsg();
-
-  // 创建 Image 消息
-  // sensor_msgs::ImagePtr img_msg = cv_bridge::CvImage(std_msgs::Header(),
-  // "mono8", _sys->_intensityImg).toImageMsg();
-
-  // 设置时间戳
-  img_msg->header.stamp = ros::Time().fromSec(_sys->_lidarEndTime);
-
-  // 设置坐标系 ID
-  img_msg->header.frame_id = "odom";
-
-  // 发布图像
-  pubImage.publish(img_msg);
-}
-
 void publishFrameBody(const ros::Publisher& pubLaserCloudBody) {
   if (_sys->_frameId % 2 != 0) return;
   int size = _sys->_localCloudPtr->points.size();
@@ -347,15 +244,6 @@ void publishFrameGlobal(const ros::Publisher& pubLaserCloudFull) {
   pcl::toROSMsg(*curWorldCloudPtr, laserCloudmsg);
   laserCloudmsg.header.stamp = ros::Time().fromSec(_sys->_lidarEndTime);
   laserCloudmsg.header.frame_id = "odom";
-  pubLaserCloudFull.publish(laserCloudmsg);
-}
-
-void publishMapline(const ros::Publisher& pubLaserCloudFull) {
-  sensor_msgs::PointCloud2 laserCloudmsg;
-  pcl::toROSMsg(*_sys->_matchworldlinecloudrgb, laserCloudmsg);
-  //_addedMapCloud.reset(new PointCloudXYZI());
-  laserCloudmsg.header.stamp = ros::Time().fromSec(_sys->_lidarEndTime);
-  laserCloudmsg.header.frame_id = "odom_mapping";
   pubLaserCloudFull.publish(laserCloudmsg);
 }
 
@@ -1362,8 +1250,7 @@ void setParams() {
   _sys->_config._bAccCov = 0.0001;
   _sys->_config._bGyrCov = 0.0001;
   _sys->_config._timeLagIMUWtrLidar = 0;
-  _sys->_config._isEstiExtrinsic = false;
-  _sys->_config._isUseIntensity = false;
+
   _sys->_config._gnssMaxError = 5;
 
   double tilVec[] = {0, 0, 0};
@@ -1430,7 +1317,6 @@ void setParams() {
 void loadRosParams(ros::NodeHandle& nh) {
   nh.param<double>("rigelslam_rot/minRange",
                    LidarProcess::mutableConfig()._blindMin, 0);
-  nh.param<double>("rigelslam_rot/ridus_k", _sys->_config._radius_k, 3);
   nh.param<double>("rigelslam_rot/maxRange",
                    LidarProcess::mutableConfig()._blindMax, 0);
   nh.param<int>("rigelslam_rot/scanLines",
@@ -1455,10 +1341,7 @@ void loadRosParams(ros::NodeHandle& nh) {
       "/home/w/code/fast_lio_win/src/config/zg_equipment_param.txt");
   nh.param<std::string>("rigelslam_rot/saveRawPath", _saveRawPath, "/tmp/");
   nh.param<std::string>("rigelslam_rot/scanSceneName", _scanScene, "");
-  nh.param<bool>("rigelslam_rot/usemutiview", _sys->_config._isUseMultiview,
-                 false);
-  nh.param<bool>("rigelslam_rot/useintensity", _sys->_config._isUseIntensity,
-                 false);
+
   nh.param<bool>("rigelslam_rot/loopClosureEnableFlag", _sys->_config._isLoopEn,
                  false);
   nh.param<bool>("rigelslam_rot/saveMap", _sys->_config._issavemap, false);
