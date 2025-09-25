@@ -22,7 +22,7 @@ rigelslam_rot:
   saveMap: false
   GravityAlign: false
   usemutiview: true
-  map_path: /media/zzy/T7/MRI-MMS_EXP/mapping/longtunnel/Ours/MapCloud_down.pcd
+  map_path: /media/zzy/T7/MRI-MMS_EXP/mapping/curvetunnel/ours/MapCloud_down.pcd
 
 
 model_path: /home/zzy/SLAM/MRI-MMS/src/Rot_SLAM/weights/gpu.pt

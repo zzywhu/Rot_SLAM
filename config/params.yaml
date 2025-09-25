@@ -14,7 +14,7 @@ rigelslam_rot:
   scanLines: 16
   historyKeyframeSearchRadius: 10
   loopcorrect: false
-  loopClosureEnableFlag: true
+  loopClosureEnableFlag: false
   useintensity: false
   ridus_k: 3
   cov_type: 1
